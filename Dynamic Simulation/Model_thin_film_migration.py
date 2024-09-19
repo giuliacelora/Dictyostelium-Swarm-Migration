@@ -16,7 +16,7 @@ L=40.
 nx=2000
 
 x0=-5
-K_vec=[1.,2.,3.,3.5,4.,4.5,5.]
+K_vec=[4.,4.5,5.,5.25,5.5,5.75,6.,6.5,7.,7.5,8.]
 mesh=IntervalMesh(nx,x0,L+x0)
 step_x=L/nx
 
@@ -25,23 +25,21 @@ definition of model and simulation paraemters
 """
 timestep=1e-3
 dt = Constant(timestep) 
-A_vec=[1.5,2.,2.5,3.,3.5,4.,4.5,5.]
+A_vec=[3.,3.5,4.,4.5,5.,5.25,5.5,5.75,6.,6.5,7.,7.5,8.]
 A=A_vec[int(sys.argv[1])] # active capillary number (Ca_\xi)
-E=0.51 # rate of bacteria consumption 
+E=0.335 # rate of bacteria consumption 
 Lsd=0.12 # slip length
 Kappa=K_vec[int(sys.argv[2])] # inverse of the capillary number (Ca_k)^{-1}
 
 g=Constant(0.0)
 gmax=0.025 # proliferation rate of cells
 tstart_prol=25 # time at which proliferation is activated in the model
-
+scaling_A=2/(3*sqrt(3)) # scaling of the alignment order parameter
 D_b=0.0001 # diffusion coefficient bacteria
 D_c=9.6 # diffusion coefficient chemoattractant
 E_c=9.6 # decay rate chemoattractant
-xmin=0.02 # minimum threshold for sensing gradient \alpha
-xmax=2. # maximum threshold for sensing gradient \beta
+alpha=0.02 # steepness sensing gradient \alpha
 delta=5/65 # control length scale disjoining pressure H_\delta
-ximax,ximin=0.1*xmax,0.25*xmin # smoothing parameter for alignment function S
 b0=0.05 # threshold bacteria concentration for cell proliferation arrest
 nb=2. # rhill coefficient for the proliferation rate of cells
 tend=500 # end time for the simulations
@@ -66,14 +64,11 @@ Front_Fun().mark(boundaries, front)
 weak formulation of the model
 """
 
-def positive(f):
-    return (f+abs(f))/2
 def psi(h):
     return -3*delta**2/(h+delta)**3*(1-delta/(h+delta)) # disjoining pressure
 
 def alignment_strenght(x):
-    Y=abs(x)
-    S = ln(cosh((Y-xmin)/ximin))*ximin-ln(cosh((xmax-Y)/ximax))*ximax # alignment function up to a constant. Since we are only interested in gradients of S, the constant can be neglected
+    S = tanh(alpha*x)**(2)/alpha/scaling_A # alignment function up to a constant. Since we are only interested in gradients of S, the constant can be neglected
     return S*A
 
 def residual(u,v,h,s,b): # weak form for the swarm height
