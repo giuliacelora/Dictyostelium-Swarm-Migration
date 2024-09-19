@@ -3,11 +3,10 @@ export FH, DS, save_solution
 
 using LinearAlgebra, SparseArrays,Parameters, Setfield,DelimitedFiles,Plots
 
-xmax=2.
-xmin=0.02
 function DS(DCDx,par)
-    
-    f(el)=(tanh((abs(el)-xmin)/0.25/xmin)+tanh((xmax-abs(el))/0.1/xmax))
+    @unpack α=par
+    scaling=1/(3)^(3/2)
+    f(el)=tanh(α*el)*(1-tanh(α*el)^2)/scaling
     S_x=f.(DCDx)
     return S_x
 end
