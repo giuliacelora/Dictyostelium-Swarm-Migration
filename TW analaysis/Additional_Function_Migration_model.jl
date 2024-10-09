@@ -3,8 +3,9 @@ export FH, DS, save_solution
 
 using LinearAlgebra, SparseArrays,Parameters, Setfield,DelimitedFiles,Plots
 
+
 function DS(DCDx,par)
-    @unpack α=par
+    @unpack α,nα=par
     scaling=1/(3)^(3/2)
     f(el)=tanh(α*el)*(1-tanh(α*el)^2)/scaling
     S_x=f.(DCDx)
@@ -12,7 +13,7 @@ function DS(DCDx,par)
 end
 
 function FH(res,H,W,U,M,p,N)
-    @unpack K,A,Lsd,θ,mu0,E,γ,expDC,S=p
+    @unpack α,K,A,Lsd,θ,mu0,E,γ,expDC,S=p
     θ1=sqrt(-2*U*mu0+θ^2)
     θ2=sqrt(2*U*mu0+θ^2)
     dx=1/N
@@ -70,6 +71,65 @@ function FH(res,H,W,U,M,p,N)
     res[N+1]=dx*sum(H)*W^2-M # constrain volume
 end
 
+function FH_gravity(res,H,W,U,M,p,N)
+    @unpack K,A,Lsd,θ,mu0,E,γ,expDC,S=p
+    θ1=sqrt(-2*U*mu0+θ^2)
+    θ2=sqrt(2*U*mu0+θ^2)
+    dx=1/N
+    DC=10^expDC    
+    
+    H_with_BC=vcat(0.0,H,0.0) # dirichlet BC
+
+    ############################################################################################
+    # definition differential operators
+    D3=diagm.(0=>3. .*ones(N+1))-diagm.(1=>3. .*ones(N))+diagm.(2=>ones(N-1))-diagm.(-1=>ones(N))
+    D3[end-1,end]=-2
+    D3H=1/(dx)^3/W^2 .*D3[2:end-1,:]*H_with_BC
+    D3H[end]-=θ2/dx^2/W^2
+
+    D2=diagm.(0=>-2. .*ones(N+1))+diagm.(-1=>ones(N))+diagm.(1=>ones(N))
+    D2*=DC/(dx*W)^2
+    D1=diagm.(0=>-1. .*ones(N+1))+diagm.(1=>ones(N))
+    D1*=1/(dx*W)
+    ############################################################################################  
+    
+    ############################################################################################
+    # solving for the chemoattractant
+    H_int=[0]
+    for n in 2:length(H_with_BC)
+        H_int=[H_int;H_int[end]+(H_with_BC[n-1]+H_with_BC[n])/2]
+    end
+    H_int=H_int*dx*W^2
+    H_int=H_int.-H_int[end]
+    xx=collect(range(0,1,step=dx))*W
+    F=exp.(E/U*H_int) # source for the concentration
+    
+    λp=(-U+sqrt(U^2+4*γ*DC))/DC/2 
+    λm=(-U-sqrt(U^2+4*γ*DC))/DC/2 
+    
+    Q=D2+U*D1-γ*diagm.(0=>ones(N+1))
+    Q[1,1:2]=[-1/dx/W-λp 1/dx/W]
+    Q[end,end-1:end]=[-1/dx/W +1/dx/W-λm]
+    RHS=[-λp*exp(-E*M/U);-γ*F[2:end-1];-λm]
+
+    C=Q\RHS # solve for the chemoattractant
+    ############################################################################################
+   
+    mH=(W*H./3 .+Lsd).*H*W # motility
+    ###### active component of the velocity
+    DxC=D1*C
+    DxC[end]=λm*(C[end]-1)
+    Sprime=S(DxC[2:end],p)
+    F_A=A#*Sprime[2:end].*(DxC[3:end]-DxC[2:end-1])/dx/W  
+    ##################
+    
+    v_i= K*(D3H.+F_A).*mH # total velocity
+    res[1]=H[end]-dx*θ2 # strong imposure contact angle
+    res[2:N]=v_i[1:end].-U 
+    res[N]=H[1]-dx*θ1 # strong imposure contact angle
+    res[N+1]=dx*sum(H)*W^2-M # constrain volume
+end
+
 
 """
 Sets the initial condition either from a given file
@@ -87,7 +147,7 @@ function initial_cond(N,p,fromfile)
 
         xx=range(dx,1-dx,step=dx)
         x0[1:N-1].=xx.*(1 .-xx)
-        x0[N]=0.5
+        x0[N]=0.1
         mass=1/2-1/3
         x0[N+1]=mass
     end
@@ -143,7 +203,7 @@ function export_flux(H,U,p)
     return flux2
 end
 
-function save_solution_A(namedir,branch,Avalue,N,par_mod)
+function save_solution_A(namedir,branch,Avalue,N,par_mod,var_sweep)
     U_vec= Vector{Float64}()
     W_vec= Vector{Float64}()
     M_vec= Vector{Float64}()
@@ -170,9 +230,14 @@ function save_solution_A(namedir,branch,Avalue,N,par_mod)
     solution_C=reshape(solution_C,Nx,length(W_vec));
     solution_F=reshape(solution_F,Nx,length(W_vec));
 
-  
+     try
+        mkdir(namedir)
+        println("Directory created")
+    catch
+        println("Directory already exists")
+    end
 
-    folder=namedir*"/A_value_"*string(Avalue)*"/"
+    folder=namedir*"/"*string(var_sweep)*"_value_"*string(Avalue)*"/"
     try
         mkdir(folder)
     catch
