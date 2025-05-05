@@ -1,4 +1,4 @@
-# Dictyostelium Group Migration 
+# Dictyostelium Swarm Migration 
 
 Here an example of simulation of the our model of the dynamics of Dictyostelium group migration
 
